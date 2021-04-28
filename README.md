@@ -75,7 +75,7 @@ test_validate_blake2b_sighash_all(&lib, &args)?;
 CD our project dir, and build it.
 
 ```bash
-capsule build
+capsule build --release
 ```
 
 The script after build in `timer-cell/build/debug`.
