@@ -1,18 +1,24 @@
 use super::*;
 use ckb_testtool::context::Context;
-use ckb_tool::ckb_types::{
-    bytes::Bytes,
-    core::TransactionBuilder,
-    packed::*,
-    prelude::*,
-};
-use ckb_tool::ckb_error::assert_error_eq;
+use ckb_tool::ckb_hash::blake2b_256;
 use ckb_tool::ckb_script::ScriptError;
-
+use ckb_tool::ckb_types::{bytes::Bytes, core::TransactionBuilder, packed::*, prelude::*};
+use ckb_tool::{ckb_error::assert_error_eq, ckb_types::core::PublicKey};
 const MAX_CYCLES: u64 = 10_000_000;
 
 // error numbers
 const ERROR_EMPTY_ARGS: i8 = 5;
+
+#[test]
+fn test_right_pubkey_no_timeout_() {
+    let pubkey = b"";
+    let pub_key = PublicKey::from_slice(pubkey).expect("pubkey");
+    let tx_hash = Byte32::from_slice(b"").expect("tx hash");
+    let index = 0;
+    let block_number = 0;
+    let cell_input = build_input_cell(tx_hash, index, block_number);
+    TransactionBuilder::default().input(cell_input).output(v)
+}
 
 #[test]
 fn test_success() {
@@ -25,9 +31,7 @@ fn test_success() {
     let lock_script = context
         .build_script(&out_point, Bytes::from(vec![42]))
         .expect("script");
-    let lock_script_dep = CellDep::new_builder()
-        .out_point(out_point)
-        .build();
+    let lock_script_dep = CellDep::new_builder().out_point(out_point).build();
 
     // prepare cells
     let input_out_point = context.create_cell(
@@ -80,9 +84,7 @@ fn test_empty_args() {
     let lock_script = context
         .build_script(&out_point, Default::default())
         .expect("script");
-    let lock_script_dep = CellDep::new_builder()
-        .out_point(out_point)
-        .build();
+    let lock_script_dep = CellDep::new_builder().out_point(out_point).build();
 
     // prepare cells
     let input_out_point = context.create_cell(
@@ -118,9 +120,7 @@ fn test_empty_args() {
     let tx = context.complete_tx(tx);
 
     // run
-    let err = context
-        .verify_tx(&tx, MAX_CYCLES)
-        .unwrap_err();
+    let err = context.verify_tx(&tx, MAX_CYCLES).unwrap_err();
     // we expect an error raised from 0-indexed cell's lock script
     let script_cell_index = 0;
     assert_error_eq!(
