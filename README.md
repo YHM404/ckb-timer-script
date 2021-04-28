@@ -28,22 +28,16 @@ First, we implement the timer code, because of The script is executed on the RSC
 The details are in the code comments.
 
 ```bash
-let script = load_script()?;
-let args: Bytes = script.args().unpack();
-//pubkey: 20bytes, time-limit: 8 byters
-if args.len() < 28 {
-    return Err(Error::LengthNotEnough);
-}
-
-let unlock_time = compute_unlock_time(&args)?;
+let lock_time = load_cell_data(0, Source::Input)?;
+let unlock_time = compute_unlock_time(&lock_time)?;
 check_if_unlock_time(unlock_time)?;
 ------------------------------------------------------------------------------------
-//args[20..28](Unix time) represent how long we want lock this cell 
+//lock_time(Unix time) represent how long we want lock this cell 
 //after the block is on the chain.
 //If We want get the unlock_time, we must get the date-time of the cell
-//and plus with lock_time(args[20..28]).
-pub fn compute_unlock_time(args: &Bytes) -> Result<u64, Error> {
-    let lock_time: u64 = u64::from_be_bytes(into_i64_array(&args[20..28])?);
+//and plus with lock_time.
+pub fn compute_unlock_time(lock_time: &[u8]) -> Result<u64, Error> {
+    let lock_time: u64 = u64::from_be_bytes(into_i64_array(lock_time)?);
     let cur_block_time = load_header(0, Source::Input)?.raw().timestamp().unpack();
     let unlock_time = lock_time + cur_block_time;
     Ok(unlock_time)
@@ -66,7 +60,9 @@ Second, we need validate if the address is what we want.
 CKB default sign-method algorithm of tx is `[SECP256K1](https://en.bitcoin.it/wiki/Secp256k1)`, so we chose [extern SECP256K1-algorithm crate](https://github.com/jjyr/ckb-dynamic-loading-secp256k1/tree/master/contracts/ckb-dynamic-loading-secp256k1)(implement by **jjyr:** [Github](https://github.com/jjyr)) to decode the signature of tx.
 
 ```bash
-let pub_key = &args[0..20];
+let script = load_script()?;
+let args: Bytes = script.args().unpack();
+let pub_key = &args;
 let mut context = unsafe { CKBDLContext::<[u8; 128 * 1024]>::new() };
 let lib = LibSecp256k1::load(&mut context);
 test_validate_blake2b_sighash_all(&lib, &args)?;
