@@ -1,0 +1,13 @@
+{
+  "language": "rust",
+  "main": "contracts/timer-cell/src/main.rs",
+  "compilers": {
+    "capsule": "v0.4.3",
+    "riscv": "bionic"
+  },
+  "output": "",
+  "scripts": {
+    "build": ""
+  },
+  "debug": {}
+}
