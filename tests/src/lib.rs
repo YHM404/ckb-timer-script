@@ -1,10 +1,11 @@
 use ckb_tool::ckb_types::{
     core::TransactionView,
     packed::{
-        Byte, Byte32, BytesOpt, BytesOptBuilder, CellInput, CellOutput, CellOutputBuilder,
-        OutPoint, ScriptBuilder, WitnessArgs,
+        self, Byte, Byte32, BytesOpt, BytesOptBuilder, CellInput, CellInputBuilder, CellOutput,
+        CellOutputBuilder, OutPoint, OutPointBuilder, RawTransaction, ScriptBuilder, Transaction,
+        WitnessArgs,
     },
-    prelude::{Builder, Entity, Pack},
+    prelude::{Builder, Entity, Pack, PackVec},
     H256,
 };
 use ckb_tool::{ckb_crypto::secp::Privkey, ckb_hash::new_blake2b, ckb_types::bytes::Bytes};
@@ -19,10 +20,10 @@ mod tests;
 const TEST_ENV_VAR: &str = "CAPSULE_TEST_ENV";
 
 //only for one-cell-input and one-cell-output tx with no type-script.
-pub fn sign_tx(tx: TransactionView, pri_key: Privkey) -> TransactionView {
+pub fn sign_tx(tx: RawTransaction, pri_key: Privkey) -> Transaction {
     let mut hasher = new_blake2b();
     //hash the tx hash
-    hasher.update(&tx.hash().raw_data());
+    hasher.update(&tx.calc_tx_hash().raw_data());
     //witnessArgs
     let witness_args = WitnessArgs::default();
     let mut dummy_lock = Vec::new();
@@ -55,19 +56,30 @@ pub fn sign_tx(tx: TransactionView, pri_key: Privkey) -> TransactionView {
         .pack();
     //put the signature back to the first witness
     let witnesses_with_lock = vec![signed_witness];
-    tx.as_advanced_builder()
-        .set_witnesses(witnesses_with_lock)
+    Transaction::from_slice(tx.as_slice())
+        .expect("raw_tx")
+        .as_builder()
+        .witnesses(witnesses_with_lock.pack())
         .build()
 }
 
-pub fn build_input_cell(tx_hash: Byte32, index: u32, block_number: u64) -> CellInput {
-    let out_point = OutPoint::new(tx_hash, index);
-    CellInput::new(out_point, block_number)
+pub fn build_input_cell(tx_hash: Byte32, index: u32) -> CellInput {
+    let out_point = OutPointBuilder::default()
+        .tx_hash(tx_hash)
+        .index(index.pack())
+        .build();
+    CellInputBuilder::default()
+        .previous_output(out_point)
+        .build()
 }
 
-pub fn build_output_cell(capacity: u64, args: Bytes, code_hash: Byte32) -> CellOutput {
+pub fn build_output_cell(
+    capacity: u64,
+    args: packed::Bytes,
+    code_hash: packed::Byte32,
+) -> CellOutput {
     let script = ScriptBuilder::default()
-        .args(args.pack())
+        .args(args)
         .code_hash(code_hash)
         .hash_type(Byte::new(1))
         .build();
@@ -76,6 +88,20 @@ pub fn build_output_cell(capacity: u64, args: Bytes, code_hash: Byte32) -> CellO
         .lock(script)
         .build()
 }
+pub fn hex_to_bytes(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 == 0 {
+        (0..s.len())
+            .step_by(2)
+            .map(|i| {
+                s.get(i..i + 2)
+                    .and_then(|sub| u8::from_str_radix(sub, 16).ok())
+            })
+            .collect()
+    } else {
+        None
+    }
+}
+
 pub enum TestEnv {
     Debug,
     Release,
