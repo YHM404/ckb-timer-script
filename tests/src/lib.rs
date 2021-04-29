@@ -1,14 +1,25 @@
-use ckb_tool::ckb_types::{
-    core::TransactionView,
-    packed::{
-        self, Byte, Byte32, BytesOpt, BytesOptBuilder, CellInput, CellInputBuilder, CellOutput,
-        CellOutputBuilder, OutPoint, OutPointBuilder, RawTransaction, ScriptBuilder, Transaction,
-        WitnessArgs,
+use ckb_tool::{
+    ckb_crypto::secp::Privkey,
+    ckb_hash::new_blake2b,
+    ckb_types::{
+        bytes::Bytes,
+        core::PublicKey,
+        packed::{CellDep, CellDepBuilder, CellDepVec, CellInputVecBuilder},
     },
-    prelude::{Builder, Entity, Pack, PackVec},
-    H256,
 };
-use ckb_tool::{ckb_crypto::secp::Privkey, ckb_hash::new_blake2b, ckb_types::bytes::Bytes};
+use ckb_tool::{
+    ckb_types::{
+        packed::{
+            self, Byte, Byte32, BytesOpt, BytesOptBuilder, BytesVec, CellInput, CellInputBuilder,
+            CellOutput, CellOutputBuilder, CellOutputVecBuilder, OutPointBuilder, RawTransaction,
+            ScriptBuilder, Transaction, WitnessArgs,
+        },
+        prelude::{Builder, Entity, Pack, PackVec},
+        H256,
+    },
+    faster_hex::hex_decode,
+    rpc_client::RpcClient,
+};
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -18,6 +29,45 @@ use std::{env, u64};
 mod tests;
 
 const TEST_ENV_VAR: &str = "CAPSULE_TEST_ENV";
+
+//build a tx and send it on chain, return tx_hash of the tx.
+pub fn build_and_sent_tx(
+    tx_hash: &[u8],
+    index: u32,
+    code_hash: &[u8],
+    pub_key_str: &str,
+    priv_key_str: &str,
+    cell_deps: CellDepVec,
+    datas: BytesVec,
+) -> Byte32 {
+    //start a rpc client
+    let client = RpcClient::new("http://127.0.0.1:1111");
+    //build cell_inputs
+    let mut input_cell_tx_hash = [0; 32];
+    hex_decode(tx_hash, &mut input_cell_tx_hash).expect("tx-hash hex decode");
+    let input_cell_tx_hash = H256::from_slice(&input_cell_tx_hash).expect("H256 tx_hash");
+    let cell_input = build_input_cell(input_cell_tx_hash.0.pack(), index);
+    let cell_input_vec = CellInputVecBuilder::default().push(cell_input).build();
+
+    //build cell_outputs
+    let mut lock_script_code_hash: [u8; 32] = [0; 32];
+    hex_decode(code_hash, &mut lock_script_code_hash).expect("lock-script hex decode");
+    let lock_script_code_hash = Byte32::new(lock_script_code_hash);
+    let pub_key = PublicKey::from_str(pub_key_str).expect("pub key");
+    let cell_output = build_output_cell(1000, pub_key.as_bytes().pack(), lock_script_code_hash);
+    let cell_output_vec = CellOutputVecBuilder::default().push(cell_output).build();
+
+    //build tx
+    let tx = RawTransaction::new_builder()
+        .inputs(cell_input_vec)
+        .outputs(cell_output_vec)
+        .outputs_data(datas)
+        .cell_deps(cell_deps)
+        .build();
+    let priv_key = Privkey::from_str(priv_key_str).expect("priv key");
+    let tx = sign_tx(tx, priv_key).into();
+    client.send_transaction(tx)
+}
 
 //only for one-cell-input and one-cell-output tx with no type-script.
 pub fn sign_tx(tx: RawTransaction, pri_key: Privkey) -> Transaction {
@@ -81,25 +131,12 @@ pub fn build_output_cell(
     let script = ScriptBuilder::default()
         .args(args)
         .code_hash(code_hash)
-        .hash_type(Byte::new(1))
+        .hash_type(Byte::new(0))
         .build();
     CellOutputBuilder::default()
         .capacity(capacity.pack())
         .lock(script)
         .build()
-}
-pub fn hex_to_bytes(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 == 0 {
-        (0..s.len())
-            .step_by(2)
-            .map(|i| {
-                s.get(i..i + 2)
-                    .and_then(|sub| u8::from_str_radix(sub, 16).ok())
-            })
-            .collect()
-    } else {
-        None
-    }
 }
 
 pub enum TestEnv {

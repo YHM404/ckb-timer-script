@@ -8,39 +8,39 @@ use ckb_tool::{
     ckb_types::{bytes::Bytes, core::TransactionBuilder, packed::Transaction},
     faster_hex::{hex_decode, hex_encode},
 };
-const MAX_CYCLES: u64 = 10_000_000;
-// error numbers
-const ERROR_EMPTY_ARGS: i8 = 5;
 
 #[test]
-fn test_put_stcrpt_to_testnet() {
-    //start a rpc client
-    let client = RpcClient::new("http://127.0.0.1:1111");
-
-    //build cell_inputs
-    let mut input_cell_tx_hash = [0; 32];
-    hex_decode(b"input_cell_tx_hash", &mut input_cell_tx_hash).expect("hex decode");
-    let input_cell_tx_hash = H256::from_slice(&input_cell_tx_hash).expect("H256 tx_hash");
+fn test_put_timer_stcrpt_to_testnet() {
+    let input_cell_tx_hash = b"0x18a103ca921adf533ec2efd6c3312098d1bcd71635e7220086aefb415bc7adf1";
     let index = 0;
-    let cell_input = build_input_cell(input_cell_tx_hash.0.pack(), index);
-    let cell_input_vec = CellInputVecBuilder::default().push(cell_input).build();
-
-    //build cell_outputs
-    let mut lock_script_code_hash: [u8; 32] = [0; 32];
-    hex_decode(b"lock_script_code_hash", &mut lock_script_code_hash).expect("hex decode");
-    let lock_script_code_hash = Byte32::new(lock_script_code_hash);
-    let pub_key = PublicKey::from_str("pub key").expect("pub key");
-    let cell_output = build_output_cell(1000, pub_key.as_bytes().pack(), lock_script_code_hash);
-    let cell_output_vec = CellOutputVecBuilder::default().push(cell_output).build();
+    let lock_script_code_hash =
+        b"0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8";
+    let pub_key_str = ".....";
+    let priv_key_str = ".....";
     let script_data = Loader::default().load_binary("timer-cell");
 
-    //build tx
-    let tx = RawTransaction::new_builder()
-        .inputs(cell_input_vec)
-        .outputs(cell_output_vec)
-        .outputs_data(vec![script_data].pack())
+    //add input_cell dep
+    let mut dep_hash = [0; 32];
+    hex_decode(
+        b"0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37",
+        &mut dep_hash,
+    );
+    let cell_dep = CellDepBuilder::default()
+        .out_point(
+            OutPointBuilder::default()
+                .index((0 as u32).pack())
+                .tx_hash(Byte32::new(dep_hash))
+                .build(),
+        )
+        .dep_type(Byte::new(0))
         .build();
-    let pri_key = Privkey::from_str("priv key").expect("pub key");
-    let tx = sign_tx(tx, pri_key).into();
-    let send_tx_hash = client.send_transaction(tx);
+    let tx_hash = build_and_sent_tx(
+        input_cell_tx_hash,
+        index,
+        lock_script_code_hash,
+        pub_key_str,
+        priv_key_str,
+        vec![cell_dep].pack(),
+        vec![script_data].pack(),
+    );
 }
