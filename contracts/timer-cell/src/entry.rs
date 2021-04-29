@@ -1,6 +1,6 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::convert::TryInto;
 use core::result::Result;
+use core::{convert::TryInto, time};
 // Import CKB syscalls and structures
 // https://nervosnetwork.github.io/ckb-std/riscv64imac-unknown-none-elf/doc/ckb_std/index.html
 use crate::error::Error;
@@ -62,10 +62,18 @@ pub fn compute_unlock_time(lock_time: &[u8]) -> Result<u64, Error> {
 }
 
 pub fn check_if_unlock_time(unlock_time: u64) -> Result<(), Error> {
+    let mut count = 0;
+    let mut mid_time = 0;
     for header in QueryIter::new(load_header, Source::HeaderDep) {
-        if unlock_time < header.raw().timestamp().unpack() {
-            return Ok(());
+        if count >= 15 {
+            break;
         }
+        count += 1;
+        mid_time += header.raw().timestamp().unpack();
+    }
+    mid_time = mid_time / count;
+    if unlock_time < mid_time {
+        return Ok(());
     }
     Err(Error::TimeLock)
 }
