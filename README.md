@@ -86,6 +86,6 @@ CD our project dir, and build it.
 capsule build --release
 ```
 
-The script after build in `timer-cell/build/debug`.
+The script after build in `timer-cell/build/release`.
 
 ## 4.2 Publish our script to CKB-testnet
